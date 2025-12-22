@@ -1079,7 +1079,9 @@ async function openOsModal(osId = null) {
         
         let proximoNumero = 1;
         if (ordensServico.length > 0) {
-            const maxNumero = ordensServico.reduce((max, os) => Math.max(max, os.numero || 0), 0);
+            // Considera apenas OS não excluídas para o próximo número
+            const activeOS = ordensServico.filter(os => !os.deleted);
+            const maxNumero = activeOS.reduce((max, os) => Math.max(max, os.numero || 0), 0);
             proximoNumero = maxNumero + 1;
         }
         
@@ -1212,10 +1214,11 @@ async function handleOsSubmit(e) {
     });
     
     const numeroOS = parseInt(document.getElementById('osNumero').value);
-    const osExistente = ordensServico.find(o => o.numero === numeroOS && o.id !== editingOsId);
+    // Permite reutilizar número se a OS estiver na lixeira (!o.deleted)
+    const osExistente = ordensServico.find(o => o.numero === numeroOS && o.id !== editingOsId && !o.deleted);
     
     if (osExistente) {
-        alert(`Já existe uma OS com o número ${numeroOS}. Por favor, escolha outro número.`);
+        alert(`Já existe uma OS ativa com o número ${numeroOS}. Por favor, escolha outro número.`);
         return;
     }
 
@@ -1436,6 +1439,16 @@ function renderTrash() {
 }
 
 async function restoreOS(osId) {
+    // Verifica conflito de número antes de restaurar
+    const os = ordensServico.find(o => o.id === osId);
+    if (os) {
+        const conflict = ordensServico.find(o => o.numero === os.numero && !o.deleted && o.id !== osId);
+        if (conflict) {
+            alert(`Não é possível restaurar a OS #${os.numero} pois já existe uma OS ativa com este número.`);
+            return;
+        }
+    }
+
     if (confirm('Deseja restaurar esta ordem de serviço?')) {
         try {
             await osCollection.doc(osId).update({
@@ -1480,7 +1493,6 @@ async function printOS(osId) {
                 .os-container {
                     border: 2px solid #000;
                     padding: 10px;
-                    height: 117mm;
                     box-sizing: border-box;
                 }
                 .header {
@@ -1531,7 +1543,7 @@ async function printOS(osId) {
                     display: grid;
                     grid-template-columns: 1fr 1fr 1fr;
                     gap: 10px;
-                    margin-top: 30px;
+                    margin-top: 40px;
                 }
                 .signature {
                     text-align: center;
