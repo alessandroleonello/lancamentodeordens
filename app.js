@@ -1443,7 +1443,7 @@ async function printOS(osId) {
                     font-family: Arial, sans-serif;
                     -webkit-print-color-adjust: exact;
                     margin: 0;
-                    padding: 5mm 10mm;
+                    padding: 1mm 10mm;
                     font-size: 11pt;
                 }
                 .os-container {
