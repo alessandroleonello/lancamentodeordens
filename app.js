@@ -1901,27 +1901,37 @@ async function handleFileImport(event) {
 
             const batch = db.batch();
             let importedCount = 0;
+            let duplicatesCount = 0;
 
             clientRows.forEach(row => {
                 const nome = row[nameIndex];
                 if (nome && String(nome).trim() !== '') {
-                    const telefone = row[mobileIndex] || row[phoneIndex] || '';
-                    const endereco = row[addressIndex] || '';
-                    const bairro = row[neighborhoodIndex] || '';
+                    const nomeLimpo = String(nome).trim();
+                    
+                    // Verifica se o cliente já existe (por nome, ignorando maiúsculas/minúsculas)
+                    const exists = clientes.some(c => c.nome.toLowerCase() === nomeLimpo.toLowerCase());
 
-                    const newClientRef = clientesCollection.doc();
-                    batch.set(newClientRef, { nome: String(nome).trim(), telefone: String(telefone).trim(), endereco: String(endereco).trim(), bairro: String(bairro).trim() });
-                    importedCount++;
+                    if (!exists) {
+                        const telefone = row[mobileIndex] || row[phoneIndex] || '';
+                        const endereco = row[addressIndex] || '';
+                        const bairro = row[neighborhoodIndex] || '';
+
+                        const newClientRef = clientesCollection.doc();
+                        batch.set(newClientRef, { nome: nomeLimpo, telefone: String(telefone).trim(), endereco: String(endereco).trim(), bairro: String(bairro).trim() });
+                        importedCount++;
+                    } else {
+                        duplicatesCount++;
+                    }
                 }
             });
 
             if (importedCount === 0) {
-                alert('Nenhum cliente válido para importar foi encontrado na planilha.');
+                alert(`Nenhum novo cliente importado. ${duplicatesCount > 0 ? `${duplicatesCount} clientes já existiam e foram ignorados.` : 'Nenhum cliente válido encontrado.'}`);
                 return;
             }
 
             await batch.commit();
-            alert(`${importedCount} clientes importados com sucesso!`);
+            alert(`${importedCount} clientes importados com sucesso! (${duplicatesCount} duplicados ignorados)`);
             await loadClientes();
             renderClientes();
         } catch (error) {
