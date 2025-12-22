@@ -1509,10 +1509,22 @@ async function printOS(osId) {
                     gap: 10px;
                     margin-bottom: 5px;
                 }
+                    .info-row-2 {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr 1fr;
+                    gap: 10px;
+                    margin-bottom: 5px;
+                }
+                     .info-row-3 {
+                    display: grid;
+                    grid-template-columns: 1fr;
+                    gap: 10px;
+                    margin-bottom: 5px;
+                }
                 .info-field {
                     border: 1px solid #000;
                     padding: 3px 5px;
-                    min-height: 20px;
+
                 }
                 .info-label {
                     font-weight: bold;
@@ -1579,15 +1591,17 @@ function generateSingleOsPrintHTML(os, cliente) {
             <div class="header">${companyName.toUpperCase()} - ORDEM DE SERVIÇO Nº ${String(os.numero).padStart(4, '0')}</div>
             <div class="info-row">
                 <div class="info-field"><span class="info-label">NOME:</span> ${cliente.nome}</div>
-                <div class="info-field"><span class="info-label">DATA:</span> ${formatDate(os.data)}</div>
-            </div>
-            <div class="info-row">
                 <div class="info-field"><span class="info-label">ENDEREÇO:</span> ${cliente.endereco}</div>
-                <div class="info-field"><span class="info-label">TELEFONE:</span> ${cliente.telefone}</div>
+                
             </div>
-            <div class="info-row">
-                <div class="info-field"><span class="info-label">MOTIVO DA O.S.:</span> ${os.motivo}</div>
+            <div class="info-row-2">
+                <div class="info-field"><span class="info-label">DATA:</span> ${formatDate(os.data)}</div>
+                <div class="info-field"><span class="info-label">TELEFONE:</span> ${cliente.telefone}</div>
                 <div class="info-field"><span class="info-label">BAIRRO:</span> ${cliente.bairro}</div>
+            </div>
+            <div class="info-row-3">
+                <div class="info-field"><span class="info-label">MOTIVO DA O.S.:</span> ${os.motivo}</div>
+                
             </div>
             <table class="produtos-table">
                 <thead>
@@ -1667,7 +1681,7 @@ async function printBatchOS() {
                 .os-container { border: 2px solid #000; padding: 10px; height: 130mm; box-sizing: border-box; display: flex; flex-direction: column; }
                 .header { text-align: center; font-weight: bold; font-size: 14pt; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
                 .info-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 5px; }
-                .info-field { border: 1px solid #000; padding: 3px 5px; min-height: 20px; }
+                .info-field { border: 1px solid #000; padding: 3px 5px; }
                 .info-label { font-weight: bold; font-size: 9pt; }
                 .produtos-table { width: 100%; border-collapse: collapse; margin: 10px 0; }
                 .produtos-table th, .produtos-table td { border: 1px solid #000; padding: 3px 5px; text-align: left; }
