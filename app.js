@@ -49,7 +49,8 @@ function initializeAuth() {
 
             // Verifica se é Super Admin para mostrar menu
             if (currentUserProfile.superAdmin === true) {
-                document.getElementById('adminMenuLink').classList.remove('hidden');
+                const adminLink = document.getElementById('adminMenuLink');
+                if (adminLink) adminLink.classList.remove('hidden');
             }
 
             // Verificação de Status da Conta (Licença)
@@ -240,7 +241,10 @@ function initializeEventListeners() {
     document.getElementById('printPaperSize').addEventListener('change', toggleCustomPrintInputs);
 
     // Admin Search
-    document.getElementById('searchUserAdmin').addEventListener('input', filterAdminUsers);
+    const searchUserAdmin = document.getElementById('searchUserAdmin');
+    if (searchUserAdmin) {
+        searchUserAdmin.addEventListener('input', filterAdminUsers);
+    }
 }
 
 // ==================== THEME ====================
@@ -1470,7 +1474,7 @@ async function printOS(osId) {
                     font-family: Arial, sans-serif;
                     -webkit-print-color-adjust: exact;
                     margin: 0;
-                    padding: 0mm 10mm;
+                    padding: 1mm 10mm;
                     font-size: 11pt;
                 }
                 .os-container {
