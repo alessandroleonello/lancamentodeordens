@@ -1480,7 +1480,7 @@ async function printOS(osId) {
                 .os-container {
                     border: 2px solid #000;
                     padding: 10px;
-                    height: 130mm;
+                    height: 117mm;
                     box-sizing: border-box;
                 }
                 .header {
@@ -1531,7 +1531,7 @@ async function printOS(osId) {
                     display: grid;
                     grid-template-columns: 1fr 1fr 1fr;
                     gap: 10px;
-                    margin-top: 50px;
+                    margin-top: 30px;
                 }
                 .signature {
                     text-align: center;
