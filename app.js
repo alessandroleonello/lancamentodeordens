@@ -23,6 +23,7 @@ let printSettings = JSON.parse(localStorage.getItem('printSettings')) || {
     width: '21.5cm',
     height: '28cm'
 };
+let adminUsersList = []; // Lista local para o painel admin
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
@@ -44,6 +45,18 @@ function initializeAuth() {
             const userDisplay = document.getElementById('currentUserDisplay');
             if (userDisplay && currentUserProfile) {
                 userDisplay.innerHTML = `${user.email}<br><small style="opacity:0.5; font-size:0.7em">${currentUserProfile.role === 'admin' ? 'Admin' : 'Membro'}</small>`;
+            }
+
+            // Verifica se é Super Admin para mostrar menu
+            if (currentUserProfile.superAdmin === true) {
+                document.getElementById('adminMenuLink').classList.remove('hidden');
+            }
+
+            // Verificação de Status da Conta (Licença)
+            // Se o status não for 'active', bloqueia o acesso
+            if (currentUserProfile.status !== 'active') {
+                showActivationScreen(user);
+                return;
             }
 
             showMainSystem();
@@ -69,6 +82,7 @@ async function setupCompany(user) {
             email: user.email,
             companyId: user.uid, // A própria empresa do usuário
             role: 'admin', // O criador é o admin
+            status: 'pending', // <--- IMPORTANTE: Novos usuários nascem bloqueados
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
         };
         await userRef.set(profile, { merge: true });
@@ -96,8 +110,16 @@ function showLoginScreen() {
     document.getElementById('mainSystem').classList.add('hidden');
 }
 
+function showActivationScreen(user) {
+    document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('mainSystem').classList.add('hidden');
+    document.getElementById('activationScreen').classList.remove('hidden');
+    document.getElementById('activationUserId').textContent = user.uid;
+}
+
 function showMainSystem() {
     document.getElementById('loginScreen').classList.add('hidden');
+    document.getElementById('activationScreen').classList.add('hidden');
     document.getElementById('mainSystem').classList.remove('hidden');
 }
 
@@ -140,6 +162,7 @@ function initializeEventListeners() {
 
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
+    document.getElementById('activationLogoutBtn').addEventListener('click', handleLogout);
 
     // Theme Toggle
     document.getElementById('themeToggleBtn').addEventListener('click', toggleTheme);
@@ -215,6 +238,9 @@ function initializeEventListeners() {
     // Print Settings
     document.getElementById('savePrintSettingsBtn').addEventListener('click', savePrintSettings);
     document.getElementById('printPaperSize').addEventListener('change', toggleCustomPrintInputs);
+
+    // Admin Search
+    document.getElementById('searchUserAdmin').addEventListener('input', filterAdminUsers);
 }
 
 // ==================== THEME ====================
@@ -350,6 +376,7 @@ function navigateToPage(page) {
     if (page === 'tecnicos') renderTecnicos();
     if (page === 'trash') renderTrash();
     if (page === 'profile') renderProfilePage();
+    if (page === 'admin') renderAdminPage();
 }
 
 // ==================== CARREGAR DADOS ====================
@@ -1443,7 +1470,7 @@ async function printOS(osId) {
                     font-family: Arial, sans-serif;
                     -webkit-print-color-adjust: exact;
                     margin: 0;
-                    padding: 1mm 10mm;
+                    padding: 0mm 10mm;
                     font-size: 11pt;
                 }
                 .os-container {
@@ -2249,6 +2276,86 @@ async function handlePasswordResetRequest(e) {
     } catch (error) {
         console.error("Erro ao enviar e-mail de redefinição:", error);
         alert("Ocorreu um erro. Verifique se o e-mail está correto.");
+    }
+}
+
+// ==================== ADMINISTRAÇÃO DO SISTEMA ====================
+
+async function renderAdminPage() {
+    // Segurança extra: só carrega se for superAdmin
+    if (!currentUserProfile || !currentUserProfile.superAdmin) return;
+
+    const tbody = document.getElementById('adminUsersTable');
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Carregando usuários...</td></tr>';
+
+    try {
+        // Busca todos os usuários do sistema
+        const snapshot = await db.collection('users').orderBy('createdAt', 'desc').get();
+        adminUsersList = snapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+        
+        filterAdminUsers();
+    } catch (error) {
+        console.error("Erro ao carregar usuários (Admin):", error);
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--danger);">Erro ao carregar dados. Verifique suas permissões.</td></tr>';
+    }
+}
+
+function filterAdminUsers() {
+    const search = document.getElementById('searchUserAdmin').value.toLowerCase();
+    const tbody = document.getElementById('adminUsersTable');
+    
+    const filtered = adminUsersList.filter(u => 
+        (u.email && u.email.toLowerCase().includes(search)) ||
+        (u.uid && u.uid.toLowerCase().includes(search)) ||
+        (u.companyId && u.companyId.toLowerCase().includes(search))
+    );
+
+    if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhum usuário encontrado.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = filtered.map(u => `
+        <tr>
+            <td>
+                <strong>${u.email}</strong><br>
+                <small style="opacity: 0.7">Criado em: ${u.createdAt ? new Date(u.createdAt.seconds * 1000).toLocaleDateString() : 'N/A'}</small>
+                ${u.superAdmin ? '<span style="color: var(--accent); font-weight: bold; margin-left: 5px;">(Super Admin)</span>' : ''}
+            </td>
+            <td><small>${u.companyId}</small></td>
+            <td>
+                <span class="os-status ${u.status === 'active' ? 'concluida' : 'lancada'}">
+                    ${u.status === 'active' ? 'Ativo' : 'Pendente/Bloqueado'}
+                </span>
+            </td>
+            <td>
+                <button class="btn-secondary" onclick="toggleUserStatus('${u.uid}', '${u.status}')" ${u.superAdmin ? 'disabled' : ''}>
+                    ${u.status === 'active' ? 'Bloquear' : 'Ativar'}
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function toggleUserStatus(uid, currentStatus) {
+    const newStatus = currentStatus === 'active' ? 'pending' : 'active';
+    const actionName = newStatus === 'active' ? 'ATIVAR' : 'BLOQUEAR';
+
+    if (confirm(`Deseja realmente ${actionName} este usuário?`)) {
+        try {
+            await db.collection('users').doc(uid).update({ status: newStatus });
+            
+            // Atualiza lista local para não precisar recarregar do banco
+            const userIndex = adminUsersList.findIndex(u => u.uid === uid);
+            if (userIndex !== -1) {
+                adminUsersList[userIndex].status = newStatus;
+            }
+            filterAdminUsers();
+            alert(`Usuário ${newStatus === 'active' ? 'ativado' : 'bloqueado'} com sucesso.`);
+        } catch (error) {
+            console.error("Erro ao alterar status:", error);
+            alert("Erro ao alterar status do usuário.");
+        }
     }
 }
 
