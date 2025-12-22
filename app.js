@@ -78,6 +78,7 @@ async function setupCompany(user) {
     motivosCollection = companyRef.collection('motivos');
     configCollection = companyRef.collection('config');
     tecnicosCollection = companyRef.collection('tecnicos');
+    logsCollection = companyRef.collection('logs');
 
     return companyId;
 }
@@ -300,6 +301,7 @@ function navigateToPage(page) {
     if (page === 'clientes') renderClientes();
     if (page === 'produtos') renderProdutos();
     if (page === 'tecnicos') renderTecnicos();
+    if (page === 'trash') renderTrash();
     if (page === 'profile') renderProfilePage();
 }
 
@@ -442,6 +444,11 @@ function renderOS() {
                     <div class="os-total">R$ ${formatMoney(os.total)}</div>
                 </div>
                 <div class="os-card-actions" onclick="event.stopPropagation()">
+                    <button class="btn-icon" onclick="viewOsHistory('${os.id}')" title="Histórico de Atividades">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+                        </svg>
+                    </button>
                     <button class="btn-icon" onclick="editOS('${os.id}')" title="Editar">
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M17 3a2.828 2.828 0 114 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>
@@ -623,7 +630,7 @@ function viewClienteHistory(clienteId) {
     
     // Filtrar OS do cliente e ordenar por número decrescente (mais recente primeiro)
     const historicoOS = ordensServico
-        .filter(os => os.clienteId === clienteId)
+        .filter(os => os.clienteId === clienteId && !os.deleted)
         .sort((a, b) => b.numero - a.numero);
 
     if (historicoOS.length === 0) {
@@ -755,6 +762,7 @@ function getFilteredOS() {
     const dataFim = document.getElementById('filterDataFim').value;
 
     const filtered = ordensServico.filter(os => {
+        if (os.deleted) return false; // Não mostrar excluídos na lista principal
         const matchStatus = !status || os.status === status;
         const cliente = clientes.find(c => c.id === os.clienteId);
         const matchSearch = !search || 
@@ -908,6 +916,9 @@ function closeModal(modalId) {
     if (modalId === 'registerModal') {
         document.getElementById('registerForm').reset();
         document.getElementById('registerError').textContent = '';
+    }
+    if (modalId === 'osHistoryModal') {
+        document.getElementById('osHistoryTable').innerHTML = '';
     }
 }
 
@@ -1113,10 +1124,12 @@ async function handleOsSubmit(e) {
     try {
         if (editingOsId) {
             await osCollection.doc(editingOsId).update(osData);
+            await logOsActivity(editingOsId, 'Edição', 'Dados da OS atualizados');
         } else {
             osData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
             osData.usuarioCriador = currentUser.email;
             const docRef = await osCollection.add(osData);
+            await logOsActivity(docRef.id, 'Criação', 'Ordem de Serviço criada');
             // Imprimir automaticamente após criar
             await printOS(docRef.id);
         }
@@ -1138,8 +1151,12 @@ async function updateStatus(osId, newStatus) {
         return;
     }
 
+    const os = ordensServico.find(o => o.id === osId);
+    const oldStatus = os ? os.status : 'desconhecido';
+
     try {
         await osCollection.doc(osId).update({ status: newStatus });
+        await logOsActivity(osId, 'Alteração de Status', `Status alterado de '${oldStatus}' para '${newStatus}'`);
         await loadOS();
         renderOS();
     } catch (error) {
@@ -1169,6 +1186,7 @@ async function confirmConclusaoOS() {
             tecnicoId: tecnicoId,
             tecnicoNome: tecnico.nome
         });
+        await logOsActivity(currentOsConclusaoId, 'Conclusão', `OS concluída pelo técnico ${tecnico.nome}`);
         closeModal('selectTecnicoModal');
         await loadOS();
         renderOS();
@@ -1187,13 +1205,133 @@ function editOS(osId) {
 }
 
 async function deleteOS(osId) {
-    if (confirm('Tem certeza que deseja excluir esta ordem de serviço?')) {
+    if (confirm('Tem certeza que deseja mover esta ordem de serviço para a lixeira?')) {
         try {
-            await osCollection.doc(osId).delete();
+            await osCollection.doc(osId).update({
+                deleted: true,
+                deletedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                deletedBy: currentUser.email
+            });
+            await logOsActivity(osId, 'Exclusão', 'OS movida para a lixeira');
             await loadOS();
             renderOS();
         } catch (error) {
             console.error('Erro ao excluir OS:', error);
+        }
+    }
+}
+
+async function logOsActivity(osId, action, details) {
+    try {
+        await logsCollection.add({
+            osId: osId,
+            action: action,
+            details: details,
+            user: currentUser.email,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+    } catch (error) {
+        console.error("Erro ao registrar log:", error);
+    }
+}
+
+async function viewOsHistory(osId) {
+    const os = ordensServico.find(o => o.id === osId);
+    if (!os) return;
+
+    const title = document.getElementById('osHistoryTitle');
+    title.textContent = `Histórico - OS #${String(os.numero).padStart(4, '0')}`;
+
+    const tbody = document.getElementById('osHistoryTable');
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Carregando...</td></tr>';
+    
+    openModal('osHistoryModal');
+
+    try {
+        const snapshot = await logsCollection
+            .where('osId', '==', osId)
+            .orderBy('timestamp', 'desc')
+            .get();
+
+        if (snapshot.empty) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align: center;">Nenhum registro encontrado.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = snapshot.docs.map(doc => {
+            const log = doc.data();
+            const date = log.timestamp ? new Date(log.timestamp.seconds * 1000).toLocaleString('pt-BR') : 'Data desconhecida';
+            return `
+                <tr>
+                    <td>${date}</td>
+                    <td>${log.user}</td>
+                    <td><strong>${log.action}</strong></td>
+                    <td>${log.details}</td>
+                </tr>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error("Erro ao carregar histórico:", error);
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--danger);">Erro ao carregar histórico.</td></tr>';
+    }
+}
+
+function renderTrash() {
+    const tbody = document.getElementById('trashTable');
+    const deletedOS = ordensServico.filter(os => os.deleted).sort((a, b) => {
+        const dateA = a.deletedAt ? a.deletedAt.seconds : 0;
+        const dateB = b.deletedAt ? b.deletedAt.seconds : 0;
+        return dateB - dateA;
+    });
+
+    if (deletedOS.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                    Lixeira vazia
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tbody.innerHTML = deletedOS.map(os => {
+        const cliente = clientes.find(c => c.id === os.clienteId);
+        const deletedDate = os.deletedAt ? new Date(os.deletedAt.seconds * 1000).toLocaleString('pt-BR') : 'N/A';
+        return `
+            <tr>
+                <td>#${String(os.numero).padStart(4, '0')}</td>
+                <td>${cliente?.nome || 'N/A'}</td>
+                <td>${deletedDate}</td>
+                <td>${os.deletedBy || 'Desconhecido'}</td>
+                <td>
+                    <div class="table-actions">
+                        <button class="btn-icon" onclick="restoreOS('${os.id}')" title="Restaurar">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <polyline points="1 4 1 10 7 10"></polyline>
+                                <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                            </svg>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+async function restoreOS(osId) {
+    if (confirm('Deseja restaurar esta ordem de serviço?')) {
+        try {
+            await osCollection.doc(osId).update({
+                deleted: false,
+                deletedAt: firebase.firestore.FieldValue.delete(),
+                deletedBy: firebase.firestore.FieldValue.delete()
+            });
+            await logOsActivity(osId, 'Restauração', 'OS restaurada da lixeira');
+            await loadOS();
+            renderTrash();
+        } catch (error) {
+            console.error('Erro ao restaurar OS:', error);
         }
     }
 }

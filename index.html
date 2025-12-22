@@ -62,6 +62,12 @@
                     </svg>
                     Produtos
                 </li>
+                <li data-page="trash">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                    </svg>
+                    Lixeira
+                </li>
                 <li data-page="profile">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
@@ -273,6 +279,29 @@
                     <tbody id="produtosTable">
                         <!-- Produtos serão inseridos aqui -->
                     </tbody>
+                </table>
+            </div>
+
+            <!-- Página de Lixeira -->
+            <div id="trashPage" class="page">
+                <div class="page-header">
+                    <div>
+                        <h1>Lixeira</h1>
+                        <p class="page-subtitle">Ordens de serviço excluídas</p>
+                    </div>
+                </div>
+
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Nº OS</th>
+                            <th>Cliente</th>
+                            <th>Excluído em</th>
+                            <th>Excluído por</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="trashTable"></tbody>
                 </table>
             </div>
 
@@ -612,6 +641,31 @@
                     </thead>
                     <tbody id="clienteHistoryTable">
                         <!-- Histórico será inserido aqui -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Histórico de Atividades da OS -->
+    <div id="osHistoryModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="osHistoryTitle">Histórico de Atividades</h2>
+                <button class="modal-close" onclick="closeModal('osHistoryModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Data/Hora</th>
+                            <th>Usuário</th>
+                            <th>Ação</th>
+                            <th>Detalhes</th>
+                        </tr>
+                    </thead>
+                    <tbody id="osHistoryTable">
+                        <!-- Logs serão inseridos aqui -->
                     </tbody>
                 </table>
             </div>

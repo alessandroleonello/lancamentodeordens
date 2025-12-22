@@ -25,3 +25,4 @@ let osCollection;
 let motivosCollection;
 let configCollection;
 let tecnicosCollection;
+let logsCollection;
