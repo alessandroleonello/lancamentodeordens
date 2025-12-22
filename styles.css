@@ -177,6 +177,21 @@ body {
     text-align: center;
 }
 
+.login-footer {
+    text-align: center;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+}
+
+.login-footer a {
+    color: var(--text-secondary);
+    text-decoration: none;
+}
+
+.login-footer a:hover {
+    color: var(--accent);
+}
+
 /* Buttons */
 .btn-primary, .btn-secondary {
     padding: 1rem 2rem;
@@ -840,6 +855,31 @@ body {
 .form-group textarea {
     resize: vertical;
     min-height: 100px;
+}
+.input-with-copy, .input-with-btn {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.input-with-copy input, .input-with-btn input {
+    flex: 1;
+}
+
+.input-with-copy .btn-icon, .input-with-btn button {
+    min-width: auto;
+}
+
+.profile-grid {
+    display: grid;
+    grid-template-columns: 1fr 1.5fr;
+    gap: 2rem;
+    align-items: start;
+}
+
+@media (max-width: 1000px) {
+    .profile-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 .form-row {

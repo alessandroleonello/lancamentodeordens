@@ -1,5 +1,6 @@
 // Estado da Aplicação
 let currentUser = null;
+let currentUserProfile = null;
 let clientes = [];
 let produtos = [];
 let ordensServico = [];
@@ -29,13 +30,14 @@ document.addEventListener('DOMContentLoaded', () => {
 function initializeAuth() {
     auth.onAuthStateChanged(async user => {
         if (user) {
-            currentUser = user;
-            
             // Configura a empresa do usuário (Multi-tenancy)
-            const companyId = await setupCompany(user);
+            await setupCompany(user);
+            currentUser = user; // Garante que currentUser está setado após o setup
             
             const userDisplay = document.getElementById('currentUserDisplay');
-            if (userDisplay) userDisplay.innerHTML = `${user.email}<br><small style="opacity:0.5; font-size:0.7em">ID: ${companyId.slice(0,6)}...</small>`;
+            if (userDisplay && currentUserProfile) {
+                userDisplay.innerHTML = `${user.email}<br><small style="opacity:0.5; font-size:0.7em">${currentUserProfile.role === 'admin' ? 'Admin' : 'Membro'}</small>`;
+            }
 
             showMainSystem();
             loadAllData();
@@ -49,20 +51,23 @@ async function setupCompany(user) {
     // Referência ao documento do usuário na coleção global 'users'
     const userRef = db.collection('users').doc(user.uid);
     const doc = await userRef.get();
-    let companyId;
 
     if (doc.exists && doc.data().companyId) {
         // Usuário já tem empresa vinculada
-        companyId = doc.data().companyId;
+        currentUserProfile = { uid: user.uid, ...doc.data() };
     } else {
         // Primeiro acesso: cria uma nova empresa (usando o ID do usuário como ID da empresa)
-        companyId = user.uid;
-        await userRef.set({
+        const profile = {
             email: user.email,
-            companyId: companyId,
-            createdAt: firebase.firestore.FieldValue.serverTimestamp()
-        }, { merge: true });
+            companyId: user.uid, // A própria empresa do usuário
+            role: 'admin', // O criador é o admin
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        };
+        await userRef.set(profile, { merge: true });
+        currentUserProfile = { uid: user.uid, ...profile };
     }
+
+    const companyId = currentUserProfile.companyId;
 
     // Aponta as coleções para dentro da empresa específica
     const companyRef = db.collection('companies').doc(companyId);
@@ -95,6 +100,12 @@ function initializeEventListeners() {
     document.getElementById('loginPassword').addEventListener('keypress', (e) => {
         if (e.key === 'Enter') handleLogin();
     });
+    document.getElementById('showRegisterLink').addEventListener('click', (e) => {
+        e.preventDefault();
+        openModal('registerModal');
+    });
+    document.getElementById('forgotPasswordLink').addEventListener('click', handlePasswordResetRequest);
+    document.getElementById('registerForm').addEventListener('submit', handleRegister);
 
     // Logout
     document.getElementById('logoutBtn').addEventListener('click', handleLogout);
@@ -155,6 +166,11 @@ function initializeEventListeners() {
     // View Toggle
     document.getElementById('viewGridBtn').addEventListener('click', () => setViewMode('grid'));
     document.getElementById('viewListBtn').addEventListener('click', () => setViewMode('list'));
+
+    // Profile Page
+    document.getElementById('copyCompanyIdBtn').addEventListener('click', copyCompanyId);
+    document.getElementById('joinCompanyBtn').addEventListener('click', handleJoinCompany);
+    document.getElementById('changePasswordBtn').addEventListener('click', handlePasswordResetRequest);
 }
 
 // ==================== THEME ====================
@@ -230,6 +246,29 @@ async function handleLogin() {
     }
 }
 
+async function handleRegister(e) {
+    e.preventDefault();
+    const email = document.getElementById('registerEmail').value;
+    const password = document.getElementById('registerPassword').value;
+    const errorEl = document.getElementById('registerError');
+    errorEl.textContent = '';
+
+    try {
+        await auth.createUserWithEmailAndPassword(email, password);
+        closeModal('registerModal');
+        // onAuthStateChanged irá lidar com o resto
+    } catch (error) {
+        if (error.code === 'auth/email-already-in-use') {
+            errorEl.textContent = 'Este e-mail já está em uso.';
+        } else if (error.code === 'auth/weak-password') {
+            errorEl.textContent = 'A senha deve ter pelo menos 6 caracteres.';
+        } else {
+            errorEl.textContent = 'Ocorreu um erro ao criar a conta.';
+        }
+        console.error("Erro no registro:", error);
+    }
+}
+
 async function handleLogout() {
     try {
         await auth.signOut();
@@ -261,6 +300,7 @@ function navigateToPage(page) {
     if (page === 'clientes') renderClientes();
     if (page === 'produtos') renderProdutos();
     if (page === 'tecnicos') renderTecnicos();
+    if (page === 'profile') renderProfilePage();
 }
 
 // ==================== CARREGAR DADOS ====================
@@ -864,6 +904,10 @@ function closeModal(modalId) {
     }
     if (modalId === 'clienteHistoryModal') {
         document.getElementById('clienteHistoryTable').innerHTML = '';
+    }
+    if (modalId === 'registerModal') {
+        document.getElementById('registerForm').reset();
+        document.getElementById('registerError').textContent = '';
     }
 }
 
@@ -1641,6 +1685,113 @@ async function deleteTecnico(tecnicoId) {
         } catch (error) {
             console.error('Erro ao excluir técnico:', error);
         }
+    }
+}
+
+// ==================== PERFIL E USUÁRIOS ====================
+
+async function renderProfilePage() {
+    if (!currentUserProfile) return;
+
+    // Preencher ID da empresa
+    document.getElementById('profileCompanyId').value = currentUserProfile.companyId;
+
+    // Lógica de visibilidade do painel de admin
+    const adminPanel = document.getElementById('adminUserManagement');
+    adminPanel.classList.toggle('hidden', currentUserProfile.role !== 'admin');
+
+    if (currentUserProfile.role === 'admin') {
+        // Carregar e listar usuários da empresa
+        const usersTable = document.getElementById('companyUsersTable');
+        usersTable.innerHTML = '<tr><td colspan="3">Carregando...</td></tr>';
+
+        const usersSnapshot = await db.collection('users')
+            .where('companyId', '==', currentUserProfile.companyId)
+            .get();
+        
+        const companyUsers = usersSnapshot.docs.map(doc => ({ uid: doc.id, ...doc.data() }));
+
+        if (companyUsers.length > 0) {
+            usersTable.innerHTML = companyUsers.map(user => `
+                <tr>
+                    <td>${user.email}</td>
+                    <td><span class="os-status ${user.role === 'admin' ? 'andamento' : 'lancada'}">${user.role}</span></td>
+                    <td>
+                        ${user.uid !== currentUser.uid ? `
+                        <div class="table-actions">
+                            <button class="btn-icon danger" onclick="removeUserFromCompany('${user.uid}')" title="Remover da Empresa">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>
+                            </button>
+                        </div>
+                        ` : ''}
+                    </td>
+                </tr>
+            `).join('');
+        } else {
+            usersTable.innerHTML = '<tr><td colspan="3">Nenhum usuário encontrado.</td></tr>';
+        }
+    }
+}
+
+function copyCompanyId() {
+    const input = document.getElementById('profileCompanyId');
+    input.select();
+    document.execCommand('copy');
+    alert('ID da Empresa copiado para a área de transferência!');
+}
+
+async function handleJoinCompany() {
+    const newCompanyId = document.getElementById('joinCompanyId').value.trim();
+    if (!newCompanyId) {
+        alert('Por favor, insira um ID de empresa.');
+        return;
+    }
+
+    if (confirm(`Tem certeza que deseja entrar na empresa com ID: ${newCompanyId}? Você perderá o acesso aos dados da sua empresa atual.`)) {
+        try {
+            await db.collection('users').doc(currentUser.uid).update({
+                companyId: newCompanyId,
+                role: 'member' // Ao entrar em outra empresa, se torna membro
+            });
+            alert('Você entrou na nova empresa! Por favor, saia e entre novamente para ver as alterações.');
+            await handleLogout();
+        } catch (error) {
+            console.error("Erro ao entrar na empresa:", error);
+            alert("Erro ao entrar na empresa. Verifique se o ID está correto.");
+        }
+    }
+}
+
+async function removeUserFromCompany(userIdToRemove) {
+    if (confirm('Tem certeza que deseja remover este usuário da sua empresa? Ele perderá o acesso aos dados.')) {
+        try {
+            // Reverte o usuário para sua própria empresa, tornando-o admin dela
+            await db.collection('users').doc(userIdToRemove).update({
+                companyId: userIdToRemove,
+                role: 'admin'
+            });
+            alert('Usuário removido com sucesso.');
+            renderProfilePage(); // Atualiza a lista
+        } catch (error) {
+            console.error("Erro ao remover usuário:", error);
+            alert("Ocorreu um erro ao remover o usuário.");
+        }
+    }
+}
+
+async function handlePasswordResetRequest(e) {
+    e.preventDefault();
+    const email = currentUser ? currentUser.email : document.getElementById('loginEmail').value;
+    if (!email) {
+        alert('Por favor, digite seu e-mail no campo de login para redefinir a senha.');
+        return;
+    }
+    try {
+        await auth.sendPasswordResetEmail(email);
+        alert(`Um e-mail de redefinição de senha foi enviado para ${email}. Verifique sua caixa de entrada.`);
+    } catch (error) {
+        console.error("Erro ao enviar e-mail de redefinição:", error);
+        alert("Ocorreu um erro. Verifique se o e-mail está correto.");
     }
 }
 
