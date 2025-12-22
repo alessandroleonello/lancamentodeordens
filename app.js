@@ -1,5 +1,6 @@
 // Estado da Aplicação
 let currentUser = null;
+let companyName = 'LANÇAMENTOS DE OS';
 let currentUserProfile = null;
 let clientes = [];
 let produtos = [];
@@ -12,10 +13,16 @@ let quickClienteCallback = null;
 let currentOsConclusaoId = null;
 let produtoItemCounter = 0;
 let selectedOsIds = new Set();
+let selectedClientIds = new Set();
 let currentViewMode = localStorage.getItem('viewMode') || 'grid';
 let currentSort = { field: 'numero', direction: 'desc' };
 let currentPage = 1;
 const itemsPerPage = 10;
+let printSettings = JSON.parse(localStorage.getItem('printSettings')) || {
+    type: 'custom',
+    width: '21.5cm',
+    height: '28cm'
+};
 
 // Inicialização
 document.addEventListener('DOMContentLoaded', () => {
@@ -42,6 +49,7 @@ function initializeAuth() {
             showMainSystem();
             loadAllData();
         } else {
+            resetAppState();
             showLoginScreen();
         }
     });
@@ -93,6 +101,28 @@ function showMainSystem() {
     document.getElementById('mainSystem').classList.remove('hidden');
 }
 
+function resetAppState() {
+    currentUser = null;
+    currentUserProfile = null;
+    companyName = 'LANÇAMENTOS DE OS';
+    clientes = [];
+    produtos = [];
+    ordensServico = [];
+    tecnicos = [];
+    motivos = [];
+    ultimoNumeroOS = 0;
+    editingOsId = null;
+    quickClienteCallback = null;
+    currentOsConclusaoId = null;
+    produtoItemCounter = 0;
+    selectedOsIds = new Set();
+    selectedClientIds = new Set();
+    currentPage = 1;
+    
+    const userDisplay = document.getElementById('currentUserDisplay');
+    if (userDisplay) userDisplay.innerHTML = '';
+}
+
 // ==================== EVENT LISTENERS ====================
 
 function initializeEventListeners() {
@@ -127,6 +157,14 @@ function initializeEventListeners() {
     document.getElementById('newClienteBtn').addEventListener('click', () => openClienteModal());
     document.getElementById('newProdutoBtn').addEventListener('click', () => openProdutoModal());
     document.getElementById('newTecnicoBtn').addEventListener('click', () => openTecnicoModal());
+
+    // Botão de Importar Clientes
+    document.getElementById('importClientesBtn').addEventListener('click', () => document.getElementById('importFile').click());
+    document.getElementById('importFile').addEventListener('change', handleFileImport);
+
+    // Client Page Selection
+    document.getElementById('selectAllClientes').addEventListener('change', toggleSelectAllClientes);
+    document.getElementById('deleteSelectedClientesBtn').addEventListener('click', deleteSelectedClientes);
 
     // Botão de Impressão em Lote
     document.getElementById('printSelectedBtn').addEventListener('click', printBatchOS);
@@ -172,6 +210,11 @@ function initializeEventListeners() {
     document.getElementById('copyCompanyIdBtn').addEventListener('click', copyCompanyId);
     document.getElementById('joinCompanyBtn').addEventListener('click', handleJoinCompany);
     document.getElementById('changePasswordBtn').addEventListener('click', handlePasswordResetRequest);
+    document.getElementById('saveCompanyConfigBtn').addEventListener('click', saveCompanyConfig);
+
+    // Print Settings
+    document.getElementById('savePrintSettingsBtn').addEventListener('click', savePrintSettings);
+    document.getElementById('printPaperSize').addEventListener('change', toggleCustomPrintInputs);
 }
 
 // ==================== THEME ====================
@@ -295,6 +338,10 @@ function navigateToPage(page) {
         selectedOsIds.clear();
         updateSelectionUI();
     }
+    if (page !== 'clientes') {
+        selectedClientIds.clear();
+        updateClientSelectionUI();
+    }
 
     // Recarregar dados se necessário
     if (page === 'dashboard') renderOS();
@@ -315,7 +362,8 @@ async function loadAllData() {
             loadTecnicos(),
             loadOS(),
             loadMotivos(),
-            loadUltimoNumeroOS()
+            loadUltimoNumeroOS(),
+            loadCompanyConfig()
         ]);
         renderOS();
     } catch (error) {
@@ -369,6 +417,43 @@ async function getProximoNumeroOS() {
     ultimoNumeroOS++;
     await configCollection.doc('ultimo_numero_os').set({ numero: ultimoNumeroOS });
     return ultimoNumeroOS;
+}
+
+async function loadCompanyConfig() {
+    try {
+        const doc = await configCollection.doc('general').get();
+        if (doc.exists && doc.data().companyName) {
+            companyName = doc.data().companyName;
+        } else {
+            companyName = 'LANÇAMENTOS DE OS';
+        }
+        updateInterfaceCompanyName();
+    } catch (error) {
+        console.error("Erro ao carregar configurações da empresa", error);
+    }
+}
+
+async function saveCompanyConfig() {
+    const newName = document.getElementById('companyNameInput').value.trim();
+    if (!newName) {
+        alert('Por favor, insira um nome válido.');
+        return;
+    }
+    
+    try {
+        await configCollection.doc('general').set({ companyName: newName }, { merge: true });
+        companyName = newName;
+        updateInterfaceCompanyName();
+        alert('Nome da empresa atualizado com sucesso!');
+    } catch (error) {
+        console.error('Erro ao salvar nome da empresa:', error);
+        alert('Erro ao salvar nome da empresa.');
+    }
+}
+
+function updateInterfaceCompanyName() {
+    const sidebarHeader = document.querySelector('.sidebar-header h2');
+    if (sidebarHeader) sidebarHeader.textContent = companyName;
 }
 
 // ==================== RENDER ====================
@@ -581,16 +666,20 @@ function renderClientes() {
     if (filtered.length === 0) {
         tbody.innerHTML = `
             <tr>
-                <td colspan="5" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
+                <td colspan="6" style="text-align: center; padding: 2rem; color: var(--text-secondary);">
                     Nenhum cliente encontrado
                 </td>
             </tr>
         `;
+        updateClientSelectionUI();
         return;
     }
 
-    tbody.innerHTML = filtered.map(cliente => `
-        <tr>
+    tbody.innerHTML = filtered.map(cliente => {
+        const isSelected = selectedClientIds.has(cliente.id);
+        return `
+        <tr class="${isSelected ? 'selected' : ''}" data-client-id="${cliente.id}">
+            <td><input type="checkbox" onclick="toggleClientSelection(event, '${cliente.id}')" ${isSelected ? 'checked' : ''}></td>
             <td>${cliente.nome}</td>
             <td>${cliente.telefone}</td>
             <td>${cliente.endereco}</td>
@@ -616,7 +705,9 @@ function renderClientes() {
                 </div>
             </td>
         </tr>
-    `).join('');
+    `}).join('');
+
+    updateClientSelectionUI();
 }
 
 function viewClienteHistory(clienteId) {
@@ -976,9 +1067,8 @@ function populateClienteSelect() {
 }
 
 function populateMotivoSelect() {
-    const select = document.getElementById('osMotivo');
-    select.innerHTML = '<option value="">Selecione um motivo</option>' +
-        motivos.map(m => `<option value="${m.descricao}">${m.descricao}</option>`).join('');
+    const datalist = document.getElementById('motivosList');
+    datalist.innerHTML = motivos.map(m => `<option value="${m.descricao}"></option>`).join('');
 }
 
 function handleClienteChange() {
@@ -1089,11 +1179,6 @@ async function handleOsSubmit(e) {
             });
         }
     });
-    
-    if (produtos.length === 0) {
-        alert('Adicione pelo menos um produto/serviço');
-        return;
-    }
     
     const numeroOS = parseInt(document.getElementById('osNumero').value);
     const osExistente = ordensServico.find(o => o.numero === numeroOS && o.id !== editingOsId);
@@ -1352,7 +1437,7 @@ async function printOS(osId) {
             <title>OS #${String(os.numero).padStart(4, '0')}</title>
             <style>
                 @page {
-                    size: A4; margin: 0;
+                    size: ${getPrintPageSizeCSS()}; margin: 0;
                 }
                 body {
                     font-family: Arial, sans-serif;
@@ -1448,7 +1533,7 @@ function generateSingleOsPrintHTML(os, cliente) {
     if (!os || !cliente) return '';
     return `
         <div class="os-container">
-            <div class="header">GLOBAL SEGURANÇA - ORDEM DE SERVIÇO Nº ${String(os.numero).padStart(4, '0')}</div>
+            <div class="header">${companyName.toUpperCase()} - ORDEM DE SERVIÇO Nº ${String(os.numero).padStart(4, '0')}</div>
             <div class="info-row">
                 <div class="info-field"><span class="info-label">NOME:</span> ${cliente.nome}</div>
                 <div class="info-field"><span class="info-label">DATA:</span> ${formatDate(os.data)}</div>
@@ -1485,8 +1570,10 @@ function generateSingleOsPrintHTML(os, cliente) {
                 </tbody>
             </table>
             <div class="total-geral">
-                ${os.desconto > 0 ? `SUBTOTAL: R$ ${formatMoney(os.subtotal)}<br>DESCONTO: R$ ${formatMoney(os.desconto)}<br>` : ''}
-                TOTAL GERAL: R$ ${formatMoney(os.total)}
+                ${os.produtos && os.produtos.length > 0 ? 
+                    `${os.desconto > 0 ? `SUBTOTAL: R$ ${formatMoney(os.subtotal)}<br>DESCONTO: R$ ${formatMoney(os.desconto)}<br>` : ''}
+                    TOTAL GERAL: R$ ${formatMoney(os.total)}`
+                    : 'TOTAL GERAL:R$___________'}
             </div>
             <div class="obs-field"><span class="info-label">OBS.:</span> ${os.observacoes || ''}</div>
             <div class="footer">
@@ -1508,6 +1595,8 @@ async function printBatchOS() {
         return { os, cliente };
     }).filter(Boolean);
 
+    const pageHeight = getBatchPageHeightMM();
+
     let batchHTML = '';
     for (let i = 0; i < osToPrint.length; i += 2) {
         batchHTML += '<div class="os-print-page">';
@@ -1528,9 +1617,9 @@ async function printBatchOS() {
             <meta charset="UTF-8">
             <title>Impressão em Lote de OS</title>
             <style>
-                @page { size: A4; margin: 10mm; }
+                @page { size: ${getPrintPageSizeCSS()}; margin: 10mm; }
                 body { font-family: Arial, sans-serif; margin: 0; padding: 0; font-size: 11pt; -webkit-print-color-adjust: exact; }
-                .os-print-page { height: 277mm; display: flex; flex-direction: column; justify-content: space-between; page-break-after: always; }
+                .os-print-page { height: ${pageHeight}mm; display: flex; flex-direction: column; justify-content: space-between; page-break-after: always; }
                 .os-print-page:last-child { page-break-after: auto; }
                 .os-container { border: 2px solid #000; padding: 10px; height: 130mm; box-sizing: border-box; display: flex; flex-direction: column; }
                 .header { text-align: center; font-weight: bold; font-size: 14pt; margin-bottom: 10px; border-bottom: 2px solid #000; padding-bottom: 5px; }
@@ -1680,22 +1769,112 @@ function editCliente(clienteId) {
 }
 
 async function deleteCliente(clienteId) {
-    // Verificar se cliente tem OS
-    const hasOS = ordensServico.some(os => os.clienteId === clienteId);
-    if (hasOS) {
-        alert('Não é possível excluir este cliente pois ele possui ordens de serviço cadastradas.');
+    // Verificar se cliente tem OS ativas
+    const hasActiveOS = ordensServico.some(os => os.clienteId === clienteId && !os.deleted);
+    if (hasActiveOS) {
+        alert('Não é possível excluir este cliente pois ele possui ordens de serviço ativas. Mova-as para a lixeira primeiro.');
         return;
     }
     
-    if (confirm('Tem certeza que deseja excluir este cliente?')) {
+    if (confirm('Tem certeza que deseja excluir este cliente permanentemente? Todas as OS na lixeira associadas a ele também serão excluídas. Esta ação não pode ser desfeita.')) {
         try {
-            await clientesCollection.doc(clienteId).delete();
-            await loadClientes();
+            const batch = db.batch();
+
+            // Marcar para deletar o cliente
+            const clientRef = clientesCollection.doc(clienteId);
+            batch.delete(clientRef);
+
+            // Encontrar e marcar para deletar as OS na lixeira
+            const osInTrashToDelete = ordensServico.filter(os => os.clienteId === clienteId && os.deleted);
+            osInTrashToDelete.forEach(os => {
+                const osRef = osCollection.doc(os.id);
+                batch.delete(osRef);
+            });
+
+            await batch.commit();
+
+            await loadAllData(); // Recarregar tudo para refletir as mudanças
             renderClientes();
         } catch (error) {
             console.error('Erro ao excluir cliente:', error);
+            alert('Ocorreu um erro ao excluir o cliente.');
         }
     }
+}
+
+async function handleFileImport(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+
+            const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+            const headerRowIndex = jsonData.findIndex(row => row.includes('Nome/Nome fantasia'));
+            if (headerRowIndex === -1) {
+                alert('Formato de planilha inválido. Não foi possível encontrar o cabeçalho "Nome/Nome fantasia".');
+                return;
+            }
+            const headers = jsonData[headerRowIndex];
+            
+            const nameIndex = headers.indexOf('Nome/Nome fantasia');
+            const phoneIndex = headers.indexOf('Telefone');
+            const mobileIndex = headers.indexOf('Celular');
+            const addressIndex = headers.indexOf('Endereço');
+            const neighborhoodIndex = headers.indexOf('Bairro');
+
+            if (nameIndex === -1) {
+                 alert('Formato de planilha inválido. A coluna "Nome/Nome fantasia" é obrigatória.');
+                return;
+            }
+
+            const clientRows = jsonData.slice(headerRowIndex + 1);
+            
+            if (clientRows.length === 0) {
+                alert('Nenhum cliente encontrado na planilha.');
+                return;
+            }
+
+            const batch = db.batch();
+            let importedCount = 0;
+
+            clientRows.forEach(row => {
+                const nome = row[nameIndex];
+                if (nome && String(nome).trim() !== '') {
+                    const telefone = row[mobileIndex] || row[phoneIndex] || '';
+                    const endereco = row[addressIndex] || '';
+                    const bairro = row[neighborhoodIndex] || '';
+
+                    const newClientRef = clientesCollection.doc();
+                    batch.set(newClientRef, { nome: String(nome).trim(), telefone: String(telefone).trim(), endereco: String(endereco).trim(), bairro: String(bairro).trim() });
+                    importedCount++;
+                }
+            });
+
+            if (importedCount === 0) {
+                alert('Nenhum cliente válido para importar foi encontrado na planilha.');
+                return;
+            }
+
+            await batch.commit();
+            alert(`${importedCount} clientes importados com sucesso!`);
+            await loadClientes();
+            renderClientes();
+        } catch (error) {
+            console.error('Erro ao importar planilha:', error);
+            alert('Ocorreu um erro ao processar o arquivo. Verifique se o formato está correto.');
+        } finally {
+            event.target.value = '';
+        }
+    };
+    reader.readAsArrayBuffer(file);
 }
 
 // ==================== PRODUTOS ====================
@@ -1758,6 +1937,128 @@ async function deleteProduto(produtoId) {
             renderProdutos();
         } catch (error) {
             console.error('Erro ao excluir produto:', error);
+        }
+    }
+}
+
+function toggleClientSelection(event, clientId) {
+    const checkbox = event.target;
+    const row = checkbox.closest('tr');
+
+    if (checkbox.checked) {
+        selectedClientIds.add(clientId);
+        row.classList.add('selected');
+    } else {
+        selectedClientIds.delete(clientId);
+        row.classList.remove('selected');
+    }
+    updateClientSelectionUI();
+}
+
+function toggleSelectAllClientes() {
+    const checkbox = document.getElementById('selectAllClientes');
+    const isChecked = checkbox.checked;
+    const filteredClients = getFilteredClientes();
+
+    filteredClients.forEach(client => {
+        if (isChecked) {
+            selectedClientIds.add(client.id);
+        } else {
+            selectedClientIds.delete(client.id);
+        }
+    });
+
+    renderClientes(); // Re-render to show selection on all rows
+    updateClientSelectionUI();
+}
+
+function updateClientSelectionUI() {
+    const deleteBtn = document.getElementById('deleteSelectedClientesBtn');
+    const selectAllCheckbox = document.getElementById('selectAllClientes');
+    const selectionCount = selectedClientIds.size;
+    const hasSelection = selectionCount > 0;
+
+    deleteBtn.classList.toggle('hidden', !hasSelection);
+
+    if (hasSelection) {
+        deleteBtn.textContent = `Excluir Selecionados (${selectionCount})`;
+    }
+
+    if (selectAllCheckbox) {
+        const filteredClients = getFilteredClientes();
+        if (filteredClients.length > 0) {
+            const allSelected = filteredClients.every(c => selectedClientIds.has(c.id));
+            const someSelected = filteredClients.some(c => selectedClientIds.has(c.id));
+            selectAllCheckbox.checked = allSelected;
+            selectAllCheckbox.indeterminate = someSelected && !allSelected;
+        } else {
+            selectAllCheckbox.checked = false;
+            selectAllCheckbox.indeterminate = false;
+        }
+    }
+}
+
+async function deleteSelectedClientes() {
+    if (selectedClientIds.size === 0) return;
+
+    const clientsToDelete = [];
+    const clientsToKeep = [];
+
+    // Separa os clientes em dois grupos: os que podem ser excluídos e os que não podem.
+    for (const clientId of selectedClientIds) {
+        const hasActiveOS = ordensServico.some(os => os.clienteId === clientId && !os.deleted);
+        if (hasActiveOS) {
+            clientsToKeep.push(clientId);
+        } else {
+            clientsToDelete.push(clientId);
+        }
+    }
+
+    // Caso 1: Nenhum cliente pode ser excluído.
+    if (clientsToDelete.length === 0) {
+        const clientNamesToKeep = clientsToKeep.map(id => clientes.find(c => c.id === id)?.nome).filter(Boolean);
+        alert(`Nenhum cliente selecionado pode ser excluído, pois todos possuem ordens de serviço ativas:\n\n- ${clientNamesToKeep.join('\n- ')}`);
+        return;
+    }
+
+    // Monta a mensagem de confirmação
+    let confirmationMessage = '';
+    if (clientsToKeep.length > 0) {
+        const clientNamesToKeep = clientsToKeep.map(id => clientes.find(c => c.id === id)?.nome).filter(Boolean);
+        confirmationMessage = `Os seguintes clientes não podem ser excluídos pois possuem OS ativas:\n\n- ${clientNamesToKeep.join('\n- ')}\n\nDeseja excluir permanentemente os outros ${clientsToDelete.length} clientes? As OS na lixeira associadas a eles também serão excluídas.`;
+    } else {
+        confirmationMessage = `Tem certeza que deseja excluir permanentemente os ${clientsToDelete.length} clientes selecionados? As OS na lixeira associadas a eles também serão excluídas. Esta ação não pode ser desfeita.`;
+    }
+
+    // Pede confirmação e procede com a exclusão
+    if (confirm(confirmationMessage)) {
+        try {
+            const batch = db.batch();
+            
+            clientsToDelete.forEach(clientId => {
+                // Deletar cliente
+                batch.delete(clientesCollection.doc(clientId));
+
+                // Deletar OS na lixeira associadas
+                const osInTrashToDelete = ordensServico.filter(os => os.clienteId === clientId && os.deleted);
+                osInTrashToDelete.forEach(os => {
+                    batch.delete(osCollection.doc(os.id));
+                });
+            });
+
+            await batch.commit();
+
+            // Atualiza o estado da seleção para manter apenas os clientes que não foram excluídos
+            selectedClientIds = new Set(clientsToKeep);
+            
+            await loadAllData(); // Recarrega os dados para garantir consistência
+            renderClientes(); // Re-renderiza a UI, que agora mostrará os clientes restantes como selecionados
+            
+            alert(`${clientsToDelete.length} cliente(s) foram excluídos com sucesso.`);
+
+        } catch (error) {
+            console.error("Erro ao excluir clientes:", error);
+            alert("Ocorreu um erro ao tentar excluir os clientes.");
         }
     }
 }
@@ -1833,6 +2134,24 @@ async function renderProfilePage() {
 
     // Preencher ID da empresa
     document.getElementById('profileCompanyId').value = currentUserProfile.companyId;
+    document.getElementById('companyNameInput').value = companyName;
+
+    // Controle de permissão para editar nome da empresa
+    const companyNameInput = document.getElementById('companyNameInput');
+    const saveCompanyBtn = document.getElementById('saveCompanyConfigBtn');
+    if (currentUserProfile.role !== 'admin') {
+        companyNameInput.readOnly = true;
+        saveCompanyBtn.style.display = 'none';
+    } else {
+        companyNameInput.readOnly = false;
+        saveCompanyBtn.style.display = 'block';
+    }
+
+    // Preencher Configurações de Impressão
+    document.getElementById('printPaperSize').value = printSettings.type;
+    document.getElementById('printCustomWidth').value = printSettings.width;
+    document.getElementById('printCustomHeight').value = printSettings.height;
+    toggleCustomPrintInputs();
 
     // Lógica de visibilidade do painel de admin
     const adminPanel = document.getElementById('adminUserManagement');
@@ -1931,6 +2250,50 @@ async function handlePasswordResetRequest(e) {
         console.error("Erro ao enviar e-mail de redefinição:", error);
         alert("Ocorreu um erro. Verifique se o e-mail está correto.");
     }
+}
+
+// ==================== CONFIGURAÇÕES DE IMPRESSÃO ====================
+
+function savePrintSettings() {
+    const type = document.getElementById('printPaperSize').value;
+    const width = document.getElementById('printCustomWidth').value;
+    const height = document.getElementById('printCustomHeight').value;
+
+    printSettings = { type, width, height };
+    localStorage.setItem('printSettings', JSON.stringify(printSettings));
+    alert('Configurações de impressão salvas com sucesso!');
+}
+
+function toggleCustomPrintInputs() {
+    const type = document.getElementById('printPaperSize').value;
+    const customInputs = document.getElementById('customPrintSizeInputs');
+    if (type === 'custom') {
+        customInputs.classList.remove('hidden');
+    } else {
+        customInputs.classList.add('hidden');
+    }
+}
+
+function getPrintPageSizeCSS() {
+    if (printSettings.type === 'a4') return 'A4';
+    if (printSettings.type === 'letter') return 'Letter';
+    return `${printSettings.width} ${printSettings.height}`;
+}
+
+function getBatchPageHeightMM() {
+    let h_mm = 297; // Default A4
+    if (printSettings.type === 'a4') h_mm = 297;
+    else if (printSettings.type === 'letter') h_mm = 279.4;
+    else {
+        // Tenta converter a altura personalizada para mm
+        let h = printSettings.height.trim().toLowerCase();
+        if (h.endsWith('mm')) h_mm = parseFloat(h);
+        else if (h.endsWith('cm')) h_mm = parseFloat(h) * 10;
+        else if (h.endsWith('in')) h_mm = parseFloat(h) * 25.4;
+        else h_mm = parseFloat(h); // Assume mm se sem unidade
+    }
+    // Subtrai margens (10mm topo + 10mm rodapé = 20mm)
+    return (h_mm - 20);
 }
 
 // ==================== MOTIVOS ====================

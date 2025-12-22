@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Global Segurança - Sistema de OS</title>
+    <title>lANÇAMENTOS DE OS - Sistema de OS</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -14,7 +14,7 @@
     <div id="loginScreen" class="screen">
         <div class="login-container">
             <div class="login-header">
-                <h1>GLOBAL SEGURANÇA</h1>
+                <h1>LANÇAMENTOS DE OS</h1>
                 <p>Sistema de Ordens de Serviço</p>
             </div>
             <div class="login-form">
@@ -35,7 +35,7 @@
     <div id="mainSystem" class="screen hidden">
         <nav class="sidebar">
             <div class="sidebar-header">
-                <h2>GLOBAL<br>SEGURANÇA</h2>
+                <h2>LANÇAMENTOS<br>DE ORDENS DE SERVIÇO</h2>
             </div>
             <ul class="sidebar-menu">
                 <li data-page="dashboard" class="active">
@@ -188,12 +188,25 @@
                         <h1>Clientes</h1>
                         <p class="page-subtitle">Gerencie seus clientes</p>
                     </div>
-                    <button id="newClienteBtn" class="btn-primary">
-                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-                            <path d="M10 4v12m-6-6h12" stroke="currentColor" stroke-width="2"/>
-                        </svg>
-                        Novo Cliente
-                    </button>
+                    <div class="page-header-actions">
+                        <button id="deleteSelectedClientesBtn" class="btn-secondary danger hidden">
+                            Excluir Selecionados
+                        </button>
+                        <button id="importClientesBtn" class="btn-secondary">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="17 8 12 3 7 8"></polyline>
+                                <line x1="12" y1="3" x2="12" y2="15"></line>
+                            </svg>
+                            Importar Clientes
+                        </button>
+                        <button id="newClienteBtn" class="btn-primary">
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                                <path d="M10 4v12m-6-6h12" stroke="currentColor" stroke-width="2"/>
+                            </svg>
+                            Novo Cliente
+                        </button>
+                    </div>
                 </div>
 
                 <div class="filters">
@@ -203,6 +216,9 @@
                 <table class="data-table">
                     <thead>
                         <tr>
+                            <th>
+                                <input type="checkbox" id="selectAllClientes" title="Selecionar Todos">
+                            </th>
                             <th>Nome</th>
                             <th>Telefone</th>
                             <th>Endereço</th>
@@ -319,6 +335,13 @@
                     <div class="form-section">
                         <div class="section-header"><h3>Minha Conta</h3></div>
                         <div class="form-group">
+                            <label>Nome da Empresa</label>
+                            <div class="input-with-btn">
+                                <input type="text" id="companyNameInput" placeholder="Nome da Empresa">
+                                <button id="saveCompanyConfigBtn" class="btn-primary">Salvar</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
                             <label>Seu ID de Empresa (para convidar)</label>
                             <div class="input-with-copy">
                                 <input type="text" id="profileCompanyId" readonly>
@@ -336,6 +359,32 @@
                         </div>
                         <div class="modal-footer" style="border-top: none; padding-top: 0;">
                             <button id="changePasswordBtn" class="btn-secondary">Alterar Senha</button>
+                        </div>
+                    </div>
+
+                    <!-- Configurações de Impressão -->
+                    <div class="form-section">
+                        <div class="section-header"><h3>Configurações de Impressão</h3></div>
+                        <div class="form-group">
+                            <label>Tamanho do Papel</label>
+                            <select id="printPaperSize">
+                                <option value="a4">A4 (210mm x 297mm)</option>
+                                <option value="letter">Carta (216mm x 279mm)</option>
+                                <option value="custom">Personalizado</option>
+                            </select>
+                        </div>
+                        <div id="customPrintSizeInputs" class="form-row hidden">
+                            <div class="form-group">
+                                <label>Largura (ex: 21.5cm)</label>
+                                <input type="text" id="printCustomWidth" placeholder="Ex: 210mm">
+                            </div>
+                            <div class="form-group">
+                                <label>Altura (ex: 28cm)</label>
+                                <input type="text" id="printCustomHeight" placeholder="Ex: 297mm">
+                            </div>
+                        </div>
+                        <div class="modal-footer" style="border-top: none; padding-top: 0;">
+                            <button id="savePrintSettingsBtn" class="btn-primary">Salvar Configurações</button>
                         </div>
                     </div>
 
@@ -414,9 +463,8 @@
                     <div class="form-group">
                         <label>Motivo da O.S.</label>
                         <div class="select-with-btn">
-                            <select id="osMotivo" required>
-                                <option value="">Selecione um motivo</option>
-                            </select>
+                            <input type="text" id="osMotivo" list="motivosList" placeholder="Selecione ou digite um motivo" required>
+                            <datalist id="motivosList"></datalist>
                             <button type="button" class="btn-secondary" onclick="openQuickMotivoModal()">+</button>
                         </div>
                     </div>
@@ -680,12 +728,16 @@
         </button>
     </div>
 
+    <!-- Input de arquivo oculto para importação -->
+    <input type="file" id="importFile" class="hidden" accept=".xls,.xlsx">
+
     <!-- Firebase -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     
     <!-- Scripts -->
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
     <script src="firebase-config.js"></script>
     <script src="app.js"></script>
 </body>

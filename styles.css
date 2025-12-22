@@ -359,6 +359,12 @@ body {
     margin-left: auto;
 }
 
+.page-header-actions .btn-secondary.danger {
+    background: var(--danger);
+    color: white;
+    border-color: var(--danger);
+}
+
 .page-header h1 {
     font-size: 2rem;
     font-weight: 700;
@@ -705,12 +711,21 @@ body {
     border-top: 1px solid var(--border);
 }
 
+.data-table th input[type="checkbox"] {
+    transform: scale(1.2);
+    cursor: pointer;
+}
+
 .data-table tbody tr {
     transition: background 0.2s ease;
 }
 
 .data-table tbody tr:hover {
     background: var(--bg-secondary);
+}
+
+.data-table tbody tr.selected {
+    background: rgba(0, 217, 255, 0.1);
 }
 
 .table-actions {
@@ -893,7 +908,7 @@ body {
     gap: 0.5rem;
 }
 
-.select-with-btn select {
+.select-with-btn select, .select-with-btn input {
     flex: 1;
 }
 
