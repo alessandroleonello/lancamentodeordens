@@ -7,6 +7,7 @@ let produtos = [];
 let ordensServico = [];
 let tecnicos = [];
 let motivos = [];
+let atendentes = [];
 let ultimoNumeroOS = 0;
 let editingOsId = null;
 let quickClienteCallback = null;
@@ -102,6 +103,7 @@ async function setupCompany(user) {
     configCollection = companyRef.collection('config');
     tecnicosCollection = companyRef.collection('tecnicos');
     logsCollection = companyRef.collection('logs');
+    atendentesCollection = companyRef.collection('atendentes');
 
     return companyId;
 }
@@ -133,6 +135,7 @@ function resetAppState() {
     ordensServico = [];
     tecnicos = [];
     motivos = [];
+    atendentes = [];
     ultimoNumeroOS = 0;
     editingOsId = null;
     quickClienteCallback = null;
@@ -202,6 +205,7 @@ function initializeEventListeners() {
     document.getElementById('produtoForm').addEventListener('submit', handleProdutoSubmit);
     document.getElementById('tecnicoForm').addEventListener('submit', handleTecnicoSubmit);
     document.getElementById('motivoForm').addEventListener('submit', handleMotivoSubmit);
+    document.getElementById('atendenteForm').addEventListener('submit', handleAtendenteSubmit);
 
     // Cliente Selection
     document.getElementById('osCliente').addEventListener('change', handleClienteChange);
@@ -393,6 +397,7 @@ async function loadAllData() {
             loadTecnicos(),
             loadOS(),
             loadMotivos(),
+            loadAtendentes(),
             loadUltimoNumeroOS(),
             loadCompanyConfig()
         ]);
@@ -427,6 +432,12 @@ async function loadMotivos() {
     const snapshot = await motivosCollection.orderBy('descricao').get();
     motivos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
     populateMotivoSelect();
+}
+
+async function loadAtendentes() {
+    const snapshot = await atendentesCollection.orderBy('nome').get();
+    atendentes = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    populateAtendenteSelect();
 }
 
 async function loadUltimoNumeroOS() {
@@ -554,7 +565,7 @@ function renderOS() {
                         <div><strong>Cliente:</strong> ${cliente?.nome || 'N/A'}</div>
                         <div><strong>Data:</strong> ${formatDate(os.data)}</div>
                         <div><strong>Motivo:</strong> ${os.motivo}</div>
-                        ${os.usuarioCriador ? `<div><small style="opacity:0.7">Por: ${os.usuarioCriador.split('@')[0]}</small></div>` : ''}
+                        ${os.atendente ? `<div><small style="opacity:0.7">Por: ${os.atendente}</small></div>` : (os.usuarioCriador ? `<div><small style="opacity:0.7">Por: ${os.usuarioCriador.split('@')[0]}</small></div>` : '')}
                         ${os.tecnicoNome ? `<div class="os-tecnico"><strong>Técnico:</strong> ${os.tecnicoNome}</div>` : '<div></div>'}
                     </div>
                     <div class="os-total">R$ ${formatMoney(os.total)}</div>
@@ -1042,6 +1053,9 @@ function closeModal(modalId) {
     if (modalId === 'osHistoryModal') {
         document.getElementById('osHistoryTable').innerHTML = '';
     }
+    if (modalId === 'atendenteModal') {
+        document.getElementById('atendenteForm').reset();
+    }
 }
 
 // ==================== ORDEM DE SERVIÇO ====================
@@ -1063,6 +1077,7 @@ async function openOsModal(osId = null) {
             document.getElementById('osCliente').value = os.clienteId;
             handleClienteChange();
             document.getElementById('osMotivo').value = os.motivo;
+            document.getElementById('osAtendente').value = os.atendente || '';
             document.getElementById('osDesconto').value = formatCurrency(os.desconto || 0);
             document.getElementById('osObservacoes').value = os.observacoes || '';
             
@@ -1102,6 +1117,14 @@ function populateClienteSelect() {
 function populateMotivoSelect() {
     const datalist = document.getElementById('motivosList');
     datalist.innerHTML = motivos.map(m => `<option value="${m.descricao}"></option>`).join('');
+}
+
+function populateAtendenteSelect() {
+    const select = document.getElementById('osAtendente');
+    const currentValue = select.value;
+    select.innerHTML = '<option value="">Selecione...</option>' +
+        atendentes.map(a => `<option value="${a.nome}">${a.nome}</option>`).join('');
+    if (currentValue) select.value = currentValue;
 }
 
 function handleClienteChange() {
@@ -1231,6 +1254,7 @@ async function handleOsSubmit(e) {
         data: document.getElementById('osData').value,
         clienteId: document.getElementById('osCliente').value,
         motivo: document.getElementById('osMotivo').value,
+        atendente: document.getElementById('osAtendente').value,
         produtos: produtos,
         subtotal: subtotal,
         desconto: desconto,
@@ -2463,6 +2487,26 @@ async function handleMotivoSubmit(e) {
     } catch (error) {
         console.error('Erro ao salvar motivo:', error);
         alert('Erro ao salvar motivo');
+    }
+}
+
+// ==================== ATENDENTES ====================
+
+function openQuickAtendenteModal() {
+    openModal('atendenteModal');
+}
+
+async function handleAtendenteSubmit(e) {
+    e.preventDefault();
+    const nome = document.getElementById('atendenteNome').value;
+    try {
+        await atendentesCollection.add({ nome });
+        closeModal('atendenteModal');
+        await loadAtendentes();
+        document.getElementById('osAtendente').value = nome;
+    } catch (error) {
+        console.error('Erro ao salvar atendente:', error);
+        alert('Erro ao salvar atendente');
     }
 }
 

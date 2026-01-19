@@ -26,3 +26,4 @@ let motivosCollection;
 let configCollection;
 let tecnicosCollection;
 let logsCollection;
+let atendentesCollection;

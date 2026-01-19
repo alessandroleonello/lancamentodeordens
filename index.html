@@ -490,6 +490,16 @@
                         </div>
                     </div>
 
+                    <div class="form-group">
+                        <label>Atendente (Quem está lançando)</label>
+                        <div class="select-with-btn">
+                            <select id="osAtendente" required>
+                                <option value="">Selecione...</option>
+                            </select>
+                            <button type="button" class="btn-secondary" onclick="openQuickAtendenteModal()">+</button>
+                        </div>
+                    </div>
+
                     <div class="form-row">
                         <div class="form-group">
                             <label>Telefone</label>
@@ -637,6 +647,28 @@
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn-secondary" onclick="closeModal('tecnicoModal')">Cancelar</button>
+                        <button type="submit" class="btn-primary">Salvar</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal de Atendente -->
+    <div id="atendenteModal" class="modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h2>Novo Atendente</h2>
+                <button class="modal-close" onclick="closeModal('atendenteModal')">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="atendenteForm">
+                    <div class="form-group">
+                        <label>Nome</label>
+                        <input type="text" id="atendenteNome" required>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn-secondary" onclick="closeModal('atendenteModal')">Cancelar</button>
                         <button type="submit" class="btn-primary">Salvar</button>
                     </div>
                 </form>
