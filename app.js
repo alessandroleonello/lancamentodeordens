@@ -1610,6 +1610,8 @@ async function printOS(osId) {
 
 function generateSingleOsPrintHTML(os, cliente) {
     if (!os || !cliente) return '';
+    const atendenteNome = os.atendente || (os.usuarioCriador ? os.usuarioCriador.split('@')[0] : '');
+    const textoAtendente = atendenteNome ? `Lançado por ${atendenteNome} - ` : '';
     return `
         <div class="os-container">
             <div class="header">${companyName.toUpperCase()} - ORDEM DE SERVIÇO Nº ${String(os.numero).padStart(4, '0')}</div>
@@ -1653,8 +1655,8 @@ function generateSingleOsPrintHTML(os, cliente) {
             <div class="total-geral">
                 ${os.produtos && os.produtos.length > 0 ? 
                     `${os.desconto > 0 ? `SUBTOTAL: R$ ${formatMoney(os.subtotal)}<br>DESCONTO: R$ ${formatMoney(os.desconto)}<br>` : ''}
-                    TOTAL GERAL: R$ ${formatMoney(os.total)}`
-                    : 'TOTAL GERAL:R$___________'}
+                    ${textoAtendente}TOTAL GERAL: R$ ${formatMoney(os.total)}`
+                    : `${textoAtendente}TOTAL GERAL:R$___________`}
             </div>
             <div class="obs-field"><span class="info-label">OBS.:</span> ${os.observacoes || ''}</div>
             <div class="footer">
